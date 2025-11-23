@@ -1,0 +1,94 @@
+# .github/workflows/build.yml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main # 当代码推送到 main 分支时触发
+      - develop # 当代码推送到 develop 分支时触发
+    tags:
+      - 'v*.*.*' # 当创建形如 v1.0.0 的标签时触发，用于发布
+  pull_request:
+    branches:
+      - main # 当有 PR 合并到 main 分支时触发
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest # 在 Ubuntu 最新版本上运行
+
+    steps:
+      - name: Checkout code # 步骤1: 检出代码
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK # 步骤2: 设置 Java 环境
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin' # 推荐使用 Temurin OpenJDK
+          java-version: '21' # 根据您的项目需求选择 Java 版本
+
+      - name: Compile Java source # 步骤3: 编译 Java 源代码
+        run: javac *.java # 编译当前目录下的所有 .java 文件
+
+      - name: Build JAR with BuildJar.java # 步骤4: 使用 BuildJar.java 打包 JAR 文件
+        run: java BuildJar # 运行 BuildJar.java 来创建 JAR
+
+      - name: Run tests (Placeholder) # 步骤5: 运行单元测试 (占位符)
+        run: echo "No tests configured. Add your test command here if you have tests."
+        # 例如：mvn test, gradle test, java -jar junit-platform-console-standalone.jar --scan-classpath
+
+      - name: Upload build artifacts # 步骤6: 上传构建产物，以便后续作业或发布使用
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-output # 产物名称
+          path: CalculatorGUI.jar # 上传生成的 JAR 文件
+
+  code-quality:
+    name: Code Quality Checks (Placeholder)
+    runs-on: ubuntu-latest
+    needs: build-and-test # 确保在构建和测试之后运行
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Java JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Run Code Quality Tool (Placeholder) # 运行代码质量检查 (占位符)
+        run: echo "No code quality tool configured. Add your lint/static analysis command here."
+        # 例如：mvn checkstyle:check, gradle check, sonar-scanner
+
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    needs: [build-and-test, code-quality] # 确保在构建、测试和代码质量检查都通过后运行
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') # 仅当推送到标签时触发
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download build artifacts # 下载之前构建作业上传的产物
+        uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: ./release-artifacts # 下载到此目录
+
+      - name: Create GitHub Release # 创建 GitHub Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: ./release-artifacts/CalculatorGUI.jar # 将下载的 JAR 文件作为附件上传到 Release
+          name: Release ${{ github.ref_name }} # Release 名称，例如 Release v1.0.0
+          tag_name: ${{ github.ref }} # 使用标签名作为 Release 标签
+          body: |
+            # Release ${{ github.ref_name }}
+
+            This release corresponds to tag `${{ github.ref_name }}`.
+            See the [commit history](https://github.com/${{ github.repository }}/compare/${{ github.event.before }}...${{ github.sha }}) for changes.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # GitHub 提供的默认 token，用于认证
