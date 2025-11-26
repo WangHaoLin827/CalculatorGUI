@@ -29,22 +29,33 @@ public class CalculatorGUI {
     private static int MAX_LEN = 24;
     private static String lastOperation = "";
     private static Double lastSecondNumber = null;
+    private static JTextArea historyDisplay; // New: History display area
+    private static final int HISTORY_LIMIT = 10; // New: Limit history entries
+    private static java.util.List<String> history = new java.util.ArrayList<>(); // New: History list
 
     public static void main(String[] args) {
+        try {
+            UIManager.setLookAndFeel("javax.swing.plaf.nimbus.NimbusLookAndFeel");
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
         // 1. 设置窗口基础
         JFrame frame = new JFrame("全功能计算器");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(350, 500);
         frame.setLayout(new BorderLayout(10, 10));
-        frame.getContentPane().setBackground(new Color(240, 240, 245));
+        frame.getContentPane().setBackground(new Color(230, 230, 235));
 
         // 2. 显示框配置
         display = new JTextField("0");
-        display.setFont(new Font("Segoe UI", Font.BOLD, 32));
+        display.setFont(new Font("Segoe UI", Font.BOLD, 36)); // Slightly larger font
         display.setHorizontalAlignment(JTextField.RIGHT);
         display.setEditable(false);
         display.setBackground(Color.WHITE);
-        display.setBorder(BorderFactory.createEmptyBorder(10, 15, 10, 15));
+        display.setForeground(Color.BLACK); // Ensure text is black
+        display.setBorder(BorderFactory.createCompoundBorder(
+            BorderFactory.createLineBorder(new Color(180, 180, 180), 1),
+            BorderFactory.createEmptyBorder(10, 15, 10, 15)
+        ));
         frame.add(display, BorderLayout.NORTH);
 
         String ml = System.getProperty("calc.maxlen");
@@ -53,8 +64,8 @@ public class CalculatorGUI {
         }
 
         // 3. 按钮面板
-        JPanel buttonPanel = new JPanel(new GridLayout(5, 4, 8, 8));
-        buttonPanel.setBackground(new Color(220, 220, 230));
+        JPanel buttonPanel = new JPanel(new GridLayout(6, 4, 10, 10)); // Slightly larger gaps, now 6 rows
+        buttonPanel.setBackground(new Color(210, 210, 215));
 
         // 按钮定义
         String[][] buttons = {
@@ -62,7 +73,8 @@ public class CalculatorGUI {
             {"7", "8", "9", "*"},
             {"4", "5", "6", "-"},
             {"1", "2", "3", "+"},
-            {"±", "0", ".", "="}
+            {"√", "^", "±", "="},
+            {"0", ".", "E", "Ans"} // Placeholder for future use or advanced features
         };
 
         // 4. 创建按钮并绑定事件
@@ -75,6 +87,20 @@ public class CalculatorGUI {
         }
 
         frame.add(buttonPanel, BorderLayout.CENTER);
+
+        // 5. 历史记录面板
+        historyDisplay = new JTextArea();
+        historyDisplay.setFont(new Font("Segoe UI", Font.PLAIN, 16));
+        historyDisplay.setEditable(false);
+        historyDisplay.setBackground(new Color(245, 245, 250));
+        historyDisplay.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
+        historyDisplay.setLineWrap(true);
+        historyDisplay.setWrapStyleWord(true);
+
+        JScrollPane historyScrollPane = new JScrollPane(historyDisplay);
+        historyScrollPane.setPreferredSize(new Dimension(120, 0)); // Adjust width as needed
+        historyScrollPane.setBorder(BorderFactory.createLineBorder(new Color(180, 180, 180), 1));
+        frame.add(historyScrollPane, BorderLayout.EAST);
 
         JRootPane root = frame.getRootPane();
         bindKey(root, KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "=");
@@ -91,6 +117,9 @@ public class CalculatorGUI {
         }
 
         // 6. 显示窗口
+        frame.pack();
+        frame.setResizable(false);
+        frame.setLocationRelativeTo(null); // Center the window
         frame.setVisible(true);
         frame.setFocusable(true);
         frame.requestFocusInWindow();
@@ -103,15 +132,18 @@ public class CalculatorGUI {
         button.setFocusPainted(false);
         button.setContentAreaFilled(false);
         button.setOpaque(true);
+        button.setBorder(BorderFactory.createLineBorder(new Color(180, 180, 180), 1));
         
         // 按钮颜色设置
         if (text.matches("[0-9.]")) {
-            button.setBackground(new Color(240, 240, 250));
+            button.setBackground(new Color(248, 248, 255)); // Lightest gray for numbers/dot
         } else if (text.equals("=")) {
-            button.setBackground(new Color(70, 130, 180));
+            button.setBackground(new Color(50, 100, 150)); // Darker blue for equals
             button.setForeground(Color.WHITE);
+        } else if (text.equals("C") || text.equals("CE") || text.equals("⌫")) {
+            button.setBackground(new Color(235, 235, 240)); // Slightly darker for clear/backspace
         } else {
-            button.setBackground(new Color(220, 220, 230));
+            button.setBackground(new Color(225, 230, 235)); // Lighter gray for operators
         }
         
         Color normal = button.getBackground();
@@ -180,20 +212,47 @@ public class CalculatorGUI {
                 display.setText("0");
                 startNewNumber = true;
             }
-            case "+", "-", "*", "/" -> {
+            case "+", "-", "*", "/", "^" -> {
                 if (!isError) {
-                    firstNumber = Double.parseDouble(display.getText());
-                    operation = command;
-                    startNewNumber = true;
-                    lastOperation = "";
-                    lastSecondNumber = null;
+                    if (!startNewNumber && operation.isEmpty()) { // If a number is just entered, and no operation is set yet
+                        firstNumber = Double.parseDouble(display.getText());
+                        operation = command;
+                        startNewNumber = true;
+                        lastOperation = "";
+                        lastSecondNumber = null;
+                    } else if (!operation.isEmpty() && startNewNumber) { // If an operation is already set, just update it
+                        operation = command;
+                    } else if (!startNewNumber && !operation.isEmpty()) { // If a number is entered after an operation, calculate first
+                        handleButtonAction("="); // Evaluate previous operation
+                        firstNumber = Double.parseDouble(display.getText());
+                        operation = command;
+                        startNewNumber = true;
+                        lastOperation = "";
+                        lastSecondNumber = null;
+                    }
+                }
+            }
+            case "√" -> {
+                if (!isError) {
+                    double value = Double.parseDouble(display.getText());
+                    if (value >= 0) {
+                        double result = Math.sqrt(value);
+                        display.setText(formatDisplay(result));
+                        firstNumber = result;
+                        startNewNumber = true;
+                        operation = ""; // Clear operation after unary calculation
+                    } else {
+                        display.setText("Error");
+                        startNewNumber = true;
+                        operation = "";
+                    }
                 }
             }
             case "=" -> {
                 if (!operation.isEmpty() && !startNewNumber && !isError) {
                     double secondNumber = Double.parseDouble(display.getText());
                     if (operation.equals("/") && secondNumber == 0) {
-                        display.setText("Error");
+                        display.setText("Division by zero");
                         operation = "";
                         startNewNumber = true;
                         return;
@@ -203,6 +262,7 @@ public class CalculatorGUI {
                         case "-" -> firstNumber - secondNumber;
                         case "*" -> firstNumber * secondNumber;
                         case "/" -> firstNumber / secondNumber;
+                        case "^" -> Math.pow(firstNumber, secondNumber);
                         default -> secondNumber;
                     };
                     String formatted = formatDisplay(result);
@@ -211,15 +271,16 @@ public class CalculatorGUI {
                     lastSecondNumber = secondNumber;
                     operation = "";
                     startNewNumber = true;
-                    if (!"Error".equals(formatted)) {
+                    if (!"Error".equals(formatted) && !"Division by zero".equals(formatted) && !"Invalid input for √".equals(formatted)) {
                         firstNumber = result;
+                        addToHistory(firstNumber + " " + operation + " " + secondNumber + " = " + formatted);
                     }
                 } else if (operation.isEmpty() && startNewNumber && !isError && lastSecondNumber != null && !lastOperation.isEmpty()) {
                     double base = Double.parseDouble(display.getText());
                     double secondNumber = lastSecondNumber;
                     String op = lastOperation;
                     if (op.equals("/") && secondNumber == 0) {
-                        display.setText("Error");
+                        display.setText("Division by zero");
                         startNewNumber = true;
                         return;
                     }
@@ -228,17 +289,35 @@ public class CalculatorGUI {
                         case "-" -> base - secondNumber;
                         case "*" -> base * secondNumber;
                         case "/" -> base / secondNumber;
+                        case "^" -> Math.pow(base, secondNumber);
                         default -> base;
                     };
                     String formatted = formatDisplay(result);
                     display.setText(formatted);
                     startNewNumber = true;
-                    if (!"Error".equals(formatted)) {
+                    if (!"Error".equals(formatted) && !"Division by zero".equals(formatted) && !"Invalid input for √".equals(formatted)) {
                         firstNumber = result;
+                        addToHistory(base + " " + op + " " + secondNumber + " = " + formatted);
                     }
                 }
             }
         }
+    }
+
+    private static void addToHistory(String entry) {
+        history.add(0, entry); // Add to the beginning
+        if (history.size() > HISTORY_LIMIT) {
+            history.remove(history.size() - 1); // Remove oldest entry
+        }
+        updateHistoryDisplay();
+    }
+
+    private static void updateHistoryDisplay() {
+        StringBuilder sb = new StringBuilder();
+        for (String entry : history) {
+            sb.append(entry).append("\n");
+        }
+        historyDisplay.setText(sb.toString());
     }
 
     private static void bindKey(JComponent c, KeyStroke ks, String command) {
@@ -252,8 +331,12 @@ public class CalculatorGUI {
     }
 
     private static String formatDisplay(double value) {
-        if (Double.isNaN(value) || Double.isInfinite(value)) {
-            return "Error";
+        if (Double.isNaN(value)) {
+            return "Invalid calculation";
+        } else if (Double.isInfinite(value)) {
+            return "Result too large/small";
+        } else if (value < 0 && operation.equals("√")) {
+            return "Invalid input for √";
         }
         DecimalFormat df = new DecimalFormat("0.############");
         df.setRoundingMode(RoundingMode.HALF_UP);
