@@ -67,7 +67,7 @@ public class CalculatorGUI {
         JPanel buttonPanel = new JPanel(new GridLayout(6, 4, 10, 10)); // Slightly larger gaps, now 6 rows
         buttonPanel.setBackground(new Color(210, 210, 215));
 
-        // 按钮定义
+        // 3.1. 按钮定义
         String[][] buttons = {
             {"C", "CE", "⌫", "/"},
             {"7", "8", "9", "*"},
